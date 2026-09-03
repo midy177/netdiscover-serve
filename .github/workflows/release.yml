@@ -23,12 +23,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # upx does not support Mach-O (macOS) — Linux ELF targets only.
           - target: x86_64-unknown-linux-gnu
+            upx: true
           - target: x86_64-unknown-linux-musl
+            upx: true
           - target: aarch64-unknown-linux-gnu
+            upx: true
           - target: aarch64-unknown-linux-musl
+            upx: true
           - target: x86_64-apple-darwin
+            upx: false
           - target: aarch64-apple-darwin
+            upx: false
 
     steps:
       - name: Checkout
@@ -51,8 +58,25 @@ jobs:
       - name: Build
         run: cargo zigbuild --locked --release --target ${{ matrix.target }}
 
+      - name: Install upx
+        uses: taiki-e/install-action@v2
+        with:
+          tool: upx
+
       - name: Stage binary
         run: cp "target/${{ matrix.target }}/release/netdiscover" "netdiscover-${{ matrix.target }}"
+
+      - name: Compress with upx
+        if: matrix.upx
+        run: |
+          upx --version
+          upx --best --lzma "netdiscover-${{ matrix.target }}"
+
+      # Musl static x86_64 runs natively on the ubuntu runner; proves the
+      # upx-packed binary still self-extracts and executes.
+      - name: Smoke test packed binary
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: "./netdiscover-x86_64-unknown-linux-musl -h"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
