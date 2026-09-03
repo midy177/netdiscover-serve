@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - target: x86_64-unknown-linux-musl
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            archive: tar.gz
+          - target: aarch64-unknown-linux-musl
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            archive: tar.gz
+          - target: x86_64-pc-windows-gnu
+            archive: zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # Installs cargo-zigbuild plus the matching zig toolchain (ziglang wheel).
+      - name: Install cargo-zigbuild
+        run: python -m pip install cargo-zigbuild
+
+      - name: Build
+        run: cargo zigbuild --locked --release --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          set -eux
+          bin="target/${{ matrix.target }}/release/netdiscover"
+          if [ "${{ matrix.target }}" = "x86_64-pc-windows-gnu" ]; then
+            bin="${bin}.exe"
+          fi
+          dir="netdiscover-${{ matrix.target }}"
+          stage="stage/${dir}"
+          mkdir -p "${stage}"
+          cp "${bin}" LICENSE README.md "${stage}/"
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            (cd stage && zip -r "../${dir}.zip" "${dir}")
+          else
+            tar -czf "${dir}.tar.gz" -C stage "${dir}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: netdiscover-${{ matrix.target }}
+          path: netdiscover-${{ matrix.target }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum netdiscover-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
