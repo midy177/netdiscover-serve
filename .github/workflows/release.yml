@@ -24,19 +24,11 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            archive: tar.gz
           - target: x86_64-unknown-linux-musl
-            archive: tar.gz
           - target: aarch64-unknown-linux-gnu
-            archive: tar.gz
           - target: aarch64-unknown-linux-musl
-            archive: tar.gz
           - target: x86_64-apple-darwin
-            archive: tar.gz
           - target: aarch64-apple-darwin
-            archive: tar.gz
-          - target: x86_64-pc-windows-gnu
-            archive: zip
 
     steps:
       - name: Checkout
@@ -62,25 +54,17 @@ jobs:
       - name: Package
         run: |
           set -eux
-          bin="target/${{ matrix.target }}/release/netdiscover"
-          if [ "${{ matrix.target }}" = "x86_64-pc-windows-gnu" ]; then
-            bin="${bin}.exe"
-          fi
           dir="netdiscover-${{ matrix.target }}"
           stage="stage/${dir}"
           mkdir -p "${stage}"
-          cp "${bin}" LICENSE README.md "${stage}/"
-          if [ "${{ matrix.archive }}" = "zip" ]; then
-            (cd stage && zip -r "../${dir}.zip" "${dir}")
-          else
-            tar -czf "${dir}.tar.gz" -C stage "${dir}"
-          fi
+          cp "target/${{ matrix.target }}/release/netdiscover" LICENSE README.md "${stage}/"
+          tar -czf "${dir}.tar.gz" -C stage "${dir}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: netdiscover-${{ matrix.target }}
-          path: netdiscover-${{ matrix.target }}.${{ matrix.archive }}
+          path: netdiscover-${{ matrix.target }}.tar.gz
           if-no-files-found: error
 
   release:
