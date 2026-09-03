@@ -1,0 +1,12 @@
+[package]
+name = "netdiscover"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Discover node network information (underlay/public IP, hostname)"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+libc = "0.2"
+ureq = "2"
