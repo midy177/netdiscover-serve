@@ -1,5 +1,7 @@
 # Netdiscover
 
+English | [简体中文](README.zh-CN.md)
+
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Netdiscover is a CLI tool for discovering node network information — hostname,
@@ -142,7 +144,7 @@ src/
 │   ├── underlay.rs   underlay IP fallback chain
 │   ├── publicip.rs   public IP fallback chain (STUN → HTTPS)
 │   ├── hostname.rs   reverse-DNS hostname resolution
-│   └── stun.rs       minimal RFC 5389 client (no dependencies)
+│   └── stun.rs       STUN policy over the `stunclient` crate (transport + RFC 5389 codec live in the library)
 └── system/       OS interfaces
     ├── ifaddr.rs     interface enumeration (getifaddrs)
     └── route.rs      default-route detection (Linux/macOS, fixture-tested)

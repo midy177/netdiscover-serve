@@ -9,4 +9,5 @@ publish = false
 
 [dependencies]
 libc = "0.2"
+stunclient = { version = "0.4.2", default-features = false }
 ureq = "2"
