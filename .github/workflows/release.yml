@@ -58,10 +58,15 @@ jobs:
       - name: Build
         run: cargo zigbuild --locked --release --target ${{ matrix.target }}
 
+      # install-action no longer ships upx; install the official static
+      # binary from GitHub releases instead (pinned version).
       - name: Install upx
-        uses: taiki-e/install-action@v2
-        with:
-          tool: upx
+        if: matrix.upx
+        run: |
+          curl -sL https://github.com/upx/upx/releases/download/v5.0.1/upx-5.0.1-amd64_linux.tar.xz -o /tmp/upx.tar.xz
+          mkdir -p /tmp/upx && tar -xJf /tmp/upx.tar.xz -C /tmp/upx --strip-components=1
+          sudo install -m 755 /tmp/upx/upx /usr/local/bin/upx
+          upx --version
 
       - name: Stage binary
         run: cp "target/${{ matrix.target }}/release/netdiscover" "netdiscover-${{ matrix.target }}"
