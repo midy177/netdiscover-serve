@@ -87,7 +87,7 @@ Usage of netdiscover:
 
 | 字段 | JSON 键 | 含义 |
 |---|---|---|
-| `hostname` | `hostname` | 公网主机名（公网 IPv4 的反向 DNS） |
+| `hostname` | `hostname` | 系统主机名（`gethostname(2)` 系统调用，不依赖 DNS） |
 | `privatev4` | `private_ipv4` | 内网（underlay）IPv4 |
 | `publicv4` | `public_ipv4` | 公网 IPv4 |
 | `publicv6` | `public_ipv6` | 公网 IPv6 |
@@ -129,14 +129,12 @@ Usage of netdiscover:
 
 **主机名**
 
-1. 解析公网 IPv4（同上链路）
-2. 反向 DNS 查询
-3. 过滤不可信结果（过短、无域名点、`.local`），返回首个有效主机名
+1. 通过 `gethostname(2)` 系统调用直接读取系统主机名（不执行命令、不依赖 DNS），去掉末尾的点
 
 ## 常见问题
 
 - **公网 IP 为空**：公网发现需要能访问外部 STUN 服务器（UDP）或 HTTPS 接口。受限网络下可用 `PUBLIC_IP` 直接指定，或配置可达的 `STUN_SERVERS`
-- **主机名为空**：主机名来自公网 IP 的 PTR 记录，云厂商通常需要手动配置反向解析；未配置时该字段为空属正常现象
+- **主机名为空**：主机名来自 `gethostname(2)` 系统调用，仅在系统未设置主机名或主机名会被截断为空时才会为空，正常环境不会出现
 - **多出口/策略路由环境返回了 VPN 地址**：内网探测返回的是"实际出网路径"的源地址。若需指定接口的地址，用 `UNDERLAY_IP` 直接指定；若需特定出口的公网 IP，在 `STUN_SERVERS` 中指定一个走该出口的 STUN 服务器
 - **在容器内运行**：容器内查到的"内网 IP"是容器网络视角的地址。若需要宿主机地址，建议以 `hostNetwork` 方式运行，或通过环境变量注入
 

@@ -73,7 +73,7 @@ Supported fields:
 
 | Field | JSON key | Meaning |
 |---|---|---|
-| `hostname` | `hostname` | Public hostname (reverse DNS of the public IPv4) |
+| `hostname` | `hostname` | System hostname (`gethostname(2)`) |
 | `privatev4` | `private_ipv4` | Underlay (private) IPv4 address of the node |
 | `publicv4` | `public_ipv4` | Public (external) IPv4 address of the node |
 | `publicv6` | `public_ipv6` | Public (external) IPv6 address of the node |
@@ -123,11 +123,8 @@ that succeeds wins.
 
 **`hostname`**
 
-1. Resolve the public IPv4 (chain above)
-2. Reverse DNS via `getnameinfo(3)` with `NI_NAMEREQD`
-3. Filter candidates the same way the Go version does: reject names shorter
-   than 6 characters, names without a dot and `.local` names; strip the
-   trailing dot
+1. The system hostname, read directly via the `gethostname(2)` syscall
+   (no subprocess, no DNS); a trailing dot is stripped
 
 ## Architecture
 
@@ -143,7 +140,7 @@ src/
 ├── discover/     discovery strategies
 │   ├── underlay.rs   underlay IP fallback chain
 │   ├── publicip.rs   public IP fallback chain (STUN → HTTPS)
-│   ├── hostname.rs   reverse-DNS hostname resolution
+│   ├── hostname.rs   system hostname via gethostname(2)
 │   └── stun.rs       STUN policy over the `stunclient` crate (transport + RFC 5389 codec live in the library)
 └── system/       OS interfaces
     ├── ifaddr.rs     interface enumeration (getifaddrs)

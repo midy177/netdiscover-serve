@@ -44,16 +44,13 @@ fn main() -> ExitCode {
     let debug = cfg.debug;
 
     match cfg.field.as_deref().unwrap_or("") {
-        "hostname" => {
-            let public = discover::publicip::discover_v4(debug);
-            match discover::hostname::discover(&public) {
-                Ok(h) => {
-                    println!("{h}");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => log::fatal(&e),
+        "hostname" => match discover::hostname::discover() {
+            Ok(h) => {
+                println!("{h}");
+                ExitCode::SUCCESS
             }
-        }
+            Err(e) => log::fatal(&e),
+        },
         "privatev4" => match discover::underlay::discover(debug) {
             Ok(ip) => {
                 println!("{ip}");
@@ -89,11 +86,12 @@ fn main() -> ExitCode {
 fn discover_all(debug: bool) -> output::Response {
     let mut ret = output::Response::default();
 
-    let public = discover::publicip::discover_v4(debug);
-    match discover::hostname::discover(&public) {
+    // Local syscall — no network involved; run it before the slow lookups.
+    match discover::hostname::discover() {
         Ok(h) => ret.hostname = h,
         Err(e) => log::debug_if(debug, &format!("failed to get hostname: {e}")),
     }
+    let public = discover::publicip::discover_v4(debug);
     match discover::underlay::discover(debug) {
         Ok(ip) => ret.private_ipv4 = ip.to_string(),
         Err(e) => log::debug_if(debug, &format!("failed to get private IPv4 address: {e}")),
