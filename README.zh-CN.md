@@ -52,6 +52,15 @@ docker run --rm -p 8080:8080/tcp -p 8080:8080/udp ghcr.io/<org>/<repo>:latest
 
 镜像默认启动 `netdiscover-serve -serve`。
 
+Linux 主机网络部署：
+
+```sh
+docker run -d --name netdiscover-serve --network host --restart unless-stopped ghcr.io/midy177/netdiscover-serve:latest
+docker compose -f compose.host-network.yml up -d
+```
+
+使用主机网络时，容器会直接监听宿主机的 `0.0.0.0:8080` TCP/UDP；Compose 中不要再配置 `ports`。
+
 本地构建镜像时，先用 zigbuild 编译 Linux 二进制，再复制进 runtime 镜像：
 
 ```sh

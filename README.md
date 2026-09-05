@@ -62,6 +62,16 @@ docker run --rm -p 8080:8080/tcp -p 8080:8080/udp ghcr.io/<org>/<repo>:latest
 
 The image starts `netdiscover-serve -serve` by default.
 
+For host-network deployment on Linux:
+
+```sh
+docker run -d --name netdiscover-serve --network host --restart unless-stopped ghcr.io/midy177/netdiscover-serve:latest
+docker compose -f compose.host-network.yml up -d
+```
+
+With host networking, the container listens directly on the host's
+`0.0.0.0:8080` for both TCP and UDP; do not publish `ports` in Compose.
+
 For a local image build, compile the Linux binary first, then copy it into the
 runtime image:
 
