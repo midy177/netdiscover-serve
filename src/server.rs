@@ -11,6 +11,8 @@ use std::thread;
 use std::time::Duration;
 
 const DISCOVER_COMMAND: &[u8] = b"discover";
+const TCP_MAX_REQUEST: usize = 4096;
+const TCP_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub struct Config {
     pub debug: bool,
@@ -83,28 +85,20 @@ fn serve_tcp(listener: TcpListener, debug: bool, response: Arc<output::Response>
 
 fn handle_tcp(mut stream: TcpStream, debug: bool, response: Arc<output::Response>) {
     let peer = stream.peer_addr().ok();
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(200)));
 
-    let mut buf = [0_u8; 1024];
-    let n = match stream.read(&mut buf) {
-        Ok(n) => n,
-        Err(e)
-            if e.kind() == std::io::ErrorKind::WouldBlock
-                || e.kind() == std::io::ErrorKind::TimedOut =>
-        {
-            0
-        }
+    let request = match read_tcp_request(&mut stream) {
+        Ok(req) => req,
         Err(e) => {
             log::debug_if(debug, &format!("server: TCP read failed: {e}"));
-            0
+            Vec::new()
         }
     };
-    if n == 0 {
+    if request.is_empty() {
         let _ = stream.shutdown(Shutdown::Both);
         return;
     }
 
-    let payload = response_payload(&response, peer, &buf[..n]);
+    let payload = response_payload(&response, peer, &request);
     if let Err(e) = stream.write_all(&payload) {
         log::debug_if(debug, &format!("server: TCP write failed: {e}"));
         return;
@@ -115,6 +109,62 @@ fn handle_tcp(mut stream: TcpStream, debug: bool, response: Arc<output::Response
     if let Some(peer) = peer {
         log::debug_if(debug, &format!("server: TCP responded to {peer}"));
     }
+}
+
+fn read_tcp_request(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
+    stream.set_read_timeout(Some(TCP_READ_TIMEOUT))?;
+
+    let mut request = Vec::with_capacity(128);
+    let mut buf = [0_u8; 512];
+    loop {
+        let n = match stream.read(&mut buf) {
+            Ok(n) => n,
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                break;
+            }
+            Err(e) => return Err(e),
+        };
+        if n == 0 {
+            break;
+        }
+
+        let done = extend_tcp_request(&mut request, &buf[..n]);
+        if done {
+            break;
+        }
+    }
+
+    Ok(request)
+}
+
+fn extend_tcp_request(request: &mut Vec<u8>, chunk: &[u8]) -> bool {
+    let remaining = TCP_MAX_REQUEST.saturating_sub(request.len());
+    if remaining == 0 {
+        return true;
+    }
+
+    let chunk = &chunk[..chunk.len().min(remaining)];
+    if let Some(pos) = chunk.iter().position(|b| *b == b'\n') {
+        request.extend_from_slice(&chunk[..=pos]);
+        return true;
+    }
+    request.extend_from_slice(chunk);
+
+    request.len() >= TCP_MAX_REQUEST
+}
+
+#[cfg(test)]
+fn tcp_request_from_chunks(chunks: &[&[u8]]) -> Vec<u8> {
+    let mut request = Vec::new();
+    for chunk in chunks {
+        if extend_tcp_request(&mut request, chunk) {
+            break;
+        }
+    }
+    request
 }
 
 fn serve_udp(socket: UdpSocket, debug: bool, response: Arc<output::Response>) {
@@ -221,6 +271,29 @@ mod tests {
         assert!(is_discover_request(b" discover\r\n"));
         assert!(!is_discover_request(b"discover now"));
         assert!(!is_discover_request(b""));
+    }
+
+    #[test]
+    fn tcp_request_can_arrive_in_chunks() {
+        assert_eq!(
+            tcp_request_from_chunks(&[b"disc", b"over\n"]),
+            b"discover\n".to_vec()
+        );
+        assert!(is_discover_request(&tcp_request_from_chunks(&[
+            b"disc", b"over\n"
+        ])));
+    }
+
+    #[test]
+    fn tcp_request_uses_first_line_and_size_limit() {
+        assert_eq!(
+            tcp_request_from_chunks(&[b"hello\nignored"]),
+            b"hello\n".to_vec()
+        );
+
+        let long = vec![b'a'; TCP_MAX_REQUEST + 128];
+        let request = tcp_request_from_chunks(&[&long]);
+        assert_eq!(request.len(), TCP_MAX_REQUEST);
     }
 
     #[test]

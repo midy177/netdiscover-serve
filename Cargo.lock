@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "netdiscover-serve"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "libc",
  "stunclient",

@@ -88,6 +88,10 @@ receives that cached response with `client_ip` and `client_port` filled from
 the request peer address. Other non-empty payloads are echoed unchanged. Empty
 UDP datagrams are ignored.
 
+TCP requests are line-oriented: the server reads until the first `\n`, EOF, a
+2-second read timeout, or a 4 KiB request limit, then responds and closes the
+connection.
+
 ```sh
 printf 'discover\n' | nc 127.0.0.1 8080
 printf 'discover\n' | nc -u -w 1 127.0.0.1 8080
