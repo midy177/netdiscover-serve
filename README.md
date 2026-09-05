@@ -90,7 +90,8 @@ UDP datagrams are ignored.
 
 TCP requests are line-oriented: the server reads until the first `\n`, EOF, a
 2-second read timeout, or a 4 KiB request limit, then responds and closes the
-connection.
+connection. TCP and UDP echo responses are bounded by the same 4 KiB request
+limit.
 
 ```sh
 printf 'discover\n' | nc 127.0.0.1 8080

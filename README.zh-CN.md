@@ -95,7 +95,7 @@ $ netdiscover-serve -serve -listen 0.0.0.0:8080 # 同时启动 TCP/UDP 服务
 失败的字段在 JSON 中为空字符串；加 `-debug` 可在 stderr 看到每项失败的具体原因（日志格式与 Go 版一致）。
 服务模式下，主机名、内网 IP、公网 IP 在启动时只发现一次并缓存。请求 payload 为 `discover` 时，TCP 连接或 UDP 报文会收到这份缓存结果，并额外填充本次请求的 `client_ip` 和 `client_port`；其他非空 payload 会被原样 echo。UDP 空包会被忽略。
 
-TCP 请求按行处理：服务端读取到第一个 `\n`、EOF、2 秒读取超时或 4 KiB 请求上限后立即响应并关闭连接。
+TCP 请求按行处理：服务端读取到第一个 `\n`、EOF、2 秒读取超时或 4 KiB 请求上限后立即响应并关闭连接。TCP 和 UDP 的 echo 响应都受同一个 4 KiB 请求上限约束。
 
 ```sh
 printf 'discover\n' | nc 127.0.0.1 8080

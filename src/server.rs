@@ -11,7 +11,7 @@ use std::thread;
 use std::time::Duration;
 
 const DISCOVER_COMMAND: &[u8] = b"discover";
-const TCP_MAX_REQUEST: usize = 4096;
+const MAX_REQUEST: usize = 4096;
 const TCP_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub struct Config {
@@ -141,7 +141,7 @@ fn read_tcp_request(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
 }
 
 fn extend_tcp_request(request: &mut Vec<u8>, chunk: &[u8]) -> bool {
-    let remaining = TCP_MAX_REQUEST.saturating_sub(request.len());
+    let remaining = MAX_REQUEST.saturating_sub(request.len());
     if remaining == 0 {
         return true;
     }
@@ -153,7 +153,7 @@ fn extend_tcp_request(request: &mut Vec<u8>, chunk: &[u8]) -> bool {
     }
     request.extend_from_slice(chunk);
 
-    request.len() >= TCP_MAX_REQUEST
+    request.len() >= MAX_REQUEST
 }
 
 #[cfg(test)]
@@ -168,7 +168,7 @@ fn tcp_request_from_chunks(chunks: &[&[u8]]) -> Vec<u8> {
 }
 
 fn serve_udp(socket: UdpSocket, debug: bool, response: Arc<output::Response>) {
-    let mut buf = [0_u8; 4096];
+    let mut buf = [0_u8; MAX_REQUEST];
     loop {
         let (n, peer) = match socket.recv_from(&mut buf) {
             Ok(v) => v,
@@ -291,9 +291,9 @@ mod tests {
             b"hello\n".to_vec()
         );
 
-        let long = vec![b'a'; TCP_MAX_REQUEST + 128];
+        let long = vec![b'a'; MAX_REQUEST + 128];
         let request = tcp_request_from_chunks(&[&long]);
-        assert_eq!(request.len(), TCP_MAX_REQUEST);
+        assert_eq!(request.len(), MAX_REQUEST);
     }
 
     #[test]
