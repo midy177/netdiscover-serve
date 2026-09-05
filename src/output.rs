@@ -1,23 +1,26 @@
-//! Response structure and JSON encoding, byte-compatible with the Go
-//! version's `json.NewEncoder(os.Stdout).Encode(&Response)`.
+//! Response structure and JSON encoding.
 
-/// All four fields are always present, in the same order as the Go version.
-#[derive(Default)]
+/// All fields are always present.
+#[derive(Clone, Default)]
 pub struct Response {
     pub hostname: String,
     pub private_ipv4: String,
     pub public_ipv4: String,
     pub public_ipv6: String,
+    pub client_ip: String,
+    pub client_port: u16,
 }
 
 /// Fixed key order, all fields always present; the caller adds the newline.
 pub fn encode_response(r: &Response) -> String {
     format!(
-        "{{\"hostname\":{},\"private_ipv4\":{},\"public_ipv4\":{},\"public_ipv6\":{}}}",
+        "{{\"hostname\":{},\"private_ipv4\":{},\"public_ipv4\":{},\"public_ipv6\":{},\"client_ip\":{},\"client_port\":{}}}",
         json_escape(&r.hostname),
         json_escape(&r.private_ipv4),
         json_escape(&r.public_ipv4),
-        json_escape(&r.public_ipv6)
+        json_escape(&r.public_ipv6),
+        json_escape(&r.client_ip),
+        r.client_port
     )
 }
 
@@ -50,16 +53,20 @@ mod tests {
         let mut r = Response::default();
         assert_eq!(
             encode_response(&r),
-            "{\"hostname\":\"\",\"private_ipv4\":\"\",\"public_ipv4\":\"\",\"public_ipv6\":\"\"}"
+            "{\"hostname\":\"\",\"private_ipv4\":\"\",\"public_ipv4\":\"\",\"public_ipv6\":\"\",\
+             \"client_ip\":\"\",\"client_port\":0}"
         );
 
         r.hostname = "node1.example.com".into();
         r.private_ipv4 = "10.0.0.5".into();
         r.public_ipv4 = "203.0.113.7".into();
+        r.client_ip = "192.0.2.10".into();
+        r.client_port = 53124;
         assert_eq!(
             encode_response(&r),
             "{\"hostname\":\"node1.example.com\",\"private_ipv4\":\"10.0.0.5\",\
-             \"public_ipv4\":\"203.0.113.7\",\"public_ipv6\":\"\"}"
+             \"public_ipv4\":\"203.0.113.7\",\"public_ipv6\":\"\",\
+             \"client_ip\":\"192.0.2.10\",\"client_port\":53124}"
         );
     }
 

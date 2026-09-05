@@ -10,12 +10,14 @@
 //! * `log` — Go `log`-compatible output helpers
 //! * `output` — response structure and JSON encoding
 //! * `discover` — the discovery engine (underlay IP, public IP, hostname)
+//! * `server` — TCP/UDP response service
 //! * `system` — OS interfaces (interface addresses, default route)
 
 mod cli;
 mod discover;
 mod log;
 mod output;
+mod server;
 mod system;
 
 use std::process::ExitCode;
@@ -42,6 +44,17 @@ fn main() -> ExitCode {
     };
 
     let debug = cfg.debug;
+
+    if cfg.service_enabled() {
+        return match server::run(server::Config {
+            debug,
+            tcp_addr: cfg.tcp_addr(),
+            udp_addr: cfg.udp_addr(),
+        }) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => log::fatal(&e),
+        };
+    }
 
     match cfg.field.as_deref().unwrap_or("") {
         "hostname" => match discover::hostname::discover() {

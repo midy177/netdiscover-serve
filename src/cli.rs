@@ -11,6 +11,45 @@
 pub struct Config {
     pub debug: bool,
     pub field: Option<String>,
+    pub serve: bool,
+    pub listen: Option<String>,
+    pub tcp: Option<String>,
+    pub udp: Option<String>,
+}
+
+impl Config {
+    /// Whether any service-mode flag was supplied.
+    pub fn service_enabled(&self) -> bool {
+        self.serve || self.tcp.is_some() || self.udp.is_some()
+    }
+
+    /// Effective TCP listen address. `None` means TCP is disabled.
+    pub fn tcp_addr(&self) -> Option<String> {
+        if self.tcp.is_some() {
+            return self.tcp.clone();
+        }
+        if self.serve {
+            return Some(self.listen_addr());
+        }
+        None
+    }
+
+    /// Effective UDP listen address. `None` means UDP is disabled.
+    pub fn udp_addr(&self) -> Option<String> {
+        if self.udp.is_some() {
+            return self.udp.clone();
+        }
+        if self.serve {
+            return Some(self.listen_addr());
+        }
+        None
+    }
+
+    fn listen_addr(&self) -> String {
+        self.listen
+            .clone()
+            .unwrap_or_else(|| "0.0.0.0:8080".to_string())
+    }
 }
 
 #[derive(Debug)]
@@ -33,6 +72,14 @@ pub fn usage(prog: &str) -> String {
     );
     s.push_str("  -provider string\n");
     s.push_str("    \tprovider type.  Options are: \"aws\", \"azure\", \"do\", gcp\"\n");
+    s.push_str("  -serve\n");
+    s.push_str("    \trun TCP and UDP response service\n");
+    s.push_str("  -listen string\n");
+    s.push_str("    \tlisten address for -serve TCP and UDP service (default \"0.0.0.0:8080\")\n");
+    s.push_str("  -tcp string\n");
+    s.push_str("    \trun TCP response service on this address\n");
+    s.push_str("  -udp string\n");
+    s.push_str("    \trun UDP response service on this address\n");
     s
 }
 
@@ -82,6 +129,20 @@ pub fn parse(args: &[String]) -> Result<Config, ParseError> {
                     cfg.debug = true;
                 }
             }
+            "serve" => {
+                if has_value {
+                    match value.parse::<bool>() {
+                        Ok(v) => cfg.serve = v,
+                        Err(_) => {
+                            return Err(ParseError::Fail(format!(
+                                "invalid boolean value \"{value}\" for -serve: parse error"
+                            )));
+                        }
+                    }
+                } else {
+                    cfg.serve = true;
+                }
+            }
             "provider" => {
                 // Placeholder: accepted for compatibility, value ignored.
                 if !has_value {
@@ -103,6 +164,23 @@ pub fn parse(args: &[String]) -> Result<Config, ParseError> {
                 };
                 if name == "field" {
                     cfg.field = Some(value);
+                }
+            }
+            "listen" | "tcp" | "udp" => {
+                let value = if has_value {
+                    value
+                } else {
+                    i += 1;
+                    if i >= args.len() {
+                        return Err(ParseError::Fail(format!("flag needs an argument: -{name}")));
+                    }
+                    args[i].clone()
+                };
+                match name {
+                    "listen" => cfg.listen = Some(value),
+                    "tcp" => cfg.tcp = Some(value),
+                    "udp" => cfg.udp = Some(value),
+                    _ => unreachable!(),
                 }
             }
             "h" | "help" => return Err(ParseError::Help),
@@ -181,6 +259,11 @@ mod tests {
             Err(ParseError::Fail(m))
                 if m == "invalid boolean value \"x\" for -debug: parse error"
         ));
+        assert!(matches!(
+            parse(&args(&["-serve=x"])),
+            Err(ParseError::Fail(m))
+                if m == "invalid boolean value \"x\" for -serve: parse error"
+        ));
         assert!(matches!(parse(&args(&["-h"])), Err(ParseError::Help)));
         assert!(matches!(parse(&args(&["-help"])), Err(ParseError::Help)));
         assert!(matches!(
@@ -191,5 +274,32 @@ mod tests {
             parse(&args(&["-=v"])),
             Err(ParseError::Fail(m)) if m == "bad flag syntax: -=v"
         ));
+    }
+
+    #[test]
+    fn service_flags_choose_listeners() {
+        let c = parse(&args(&["-serve"])).unwrap();
+        assert!(c.service_enabled());
+        assert_eq!(c.tcp_addr().as_deref(), Some("0.0.0.0:8080"));
+        assert_eq!(c.udp_addr().as_deref(), Some("0.0.0.0:8080"));
+
+        let c = parse(&args(&["-serve", "-listen", "127.0.0.1:9000"])).unwrap();
+        assert_eq!(c.tcp_addr().as_deref(), Some("127.0.0.1:9000"));
+        assert_eq!(c.udp_addr().as_deref(), Some("127.0.0.1:9000"));
+
+        let c = parse(&args(&["-tcp", "127.0.0.1:9001"])).unwrap();
+        assert!(c.service_enabled());
+        assert_eq!(c.tcp_addr().as_deref(), Some("127.0.0.1:9001"));
+        assert_eq!(c.udp_addr(), None);
+
+        let c = parse(&args(&[
+            "-serve",
+            "-listen",
+            "127.0.0.1:9000",
+            "-udp=127.0.0.1:9002",
+        ]))
+        .unwrap();
+        assert_eq!(c.tcp_addr().as_deref(), Some("127.0.0.1:9000"));
+        assert_eq!(c.udp_addr().as_deref(), Some("127.0.0.1:9002"));
     }
 }

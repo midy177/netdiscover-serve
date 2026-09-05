@@ -21,45 +21,86 @@ CLI.
 Requires a Rust toolchain (1.85+).
 
 ```sh
-git clone https://github.com/CyCoreSystems/netdiscover.git
-cd netdiscover
+git clone https://github.com/<org>/<repo>.git
+cd <repo>
 cargo install --path .
 ```
 
 Or build a release binary directly:
 
 ```sh
-cargo build --release   # ./target/release/netdiscover
+cargo build --release   # ./target/release/netdiscover-serve
 ```
 
 ## Quick start
 
 ```console
-$ netdiscover -field publicv4
+$ netdiscover-serve -field publicv4
 203.0.113.7
 
-$ netdiscover -field privatev4
+$ netdiscover-serve -field privatev4
 10.0.0.5
 
-$ netdiscover
-{"hostname":"node1.example.com","private_ipv4":"10.0.0.5","public_ipv4":"203.0.113.7","public_ipv6":""}
+$ netdiscover-serve
+{"hostname":"node1.example.com","private_ipv4":"10.0.0.5","public_ipv4":"203.0.113.7","public_ipv6":"","client_ip":"","client_port":0}
 
-$ netdiscover -debug
+$ netdiscover-serve -debug
 2026/09/03 12:14:51 underlay: default route device is en0
 2026/09/03 12:14:51 underlay: UDP probe selected source address 10.10.148.41
-{"hostname":"","private_ipv4":"10.10.148.41","public_ipv4":"203.0.113.7","public_ipv6":""}
+{"hostname":"","private_ipv4":"10.10.148.41","public_ipv4":"203.0.113.7","public_ipv6":"","client_ip":"","client_port":0}
+
+$ netdiscover-serve -serve -listen 0.0.0.0:8080
+2026/09/03 12:14:51 server: TCP listening on 0.0.0.0:8080
+2026/09/03 12:14:51 server: UDP listening on 0.0.0.0:8080
+```
+
+## Docker
+
+```sh
+docker run --rm -p 8080:8080/tcp -p 8080:8080/udp ghcr.io/<org>/<repo>:latest
+```
+
+The image starts `netdiscover-serve -serve` by default.
+
+For a local image build, compile the Linux binary first, then copy it into the
+runtime image:
+
+```sh
+cargo zigbuild --locked --release --target aarch64-unknown-linux-musl
+mkdir -p dist/docker
+cp target/aarch64-unknown-linux-musl/release/netdiscover-serve dist/docker/netdiscover-serve-arm64
+docker build -t netdiscover-serve:test .
+```
+
+In service mode, hostname/private/public IP discovery runs once during startup.
+When the request payload is `discover`, each TCP connection or UDP datagram
+receives that cached response with `client_ip` and `client_port` filled from
+the request peer address. Other non-empty payloads are echoed unchanged. Empty
+UDP datagrams are ignored.
+
+```sh
+printf 'discover\n' | nc 127.0.0.1 8080
+printf 'discover\n' | nc -u -w 1 127.0.0.1 8080
 ```
 
 ## CLI reference
 
 ```
-Usage of netdiscover:
+Usage of netdiscover-serve:
   -debug
     	debug mode
   -field string
     	return only a single field.  Options are: "hostname", "publicv4", publicv6", "privatev4"
   -provider string
     	provider type.  Options are: "aws", "azure", "do", gcp"
+  -serve
+    	run TCP and UDP response service
+  -listen string
+    	listen address for -serve TCP and UDP service (default "0.0.0.0:8080")
+  -tcp string
+    	run TCP response service on this address
+  -udp string
+    	run UDP response service on this address
 ```
 
 | Flag | Description |
@@ -67,6 +108,10 @@ Usage of netdiscover:
 | `-field <name>` | Return only a single field; omit (or use `""`) to get the full JSON response |
 | `-debug` | Log individual discovery failures to stderr in Go `log` format instead of silently omitting fields |
 | `-provider <name>` | Placeholder accepted for compatibility with the Go CLI; the value is discarded at parse time |
+| `-serve` | Run both TCP and UDP services, defaulting to `0.0.0.0:8080` |
+| `-listen <addr>` | Listen address used by `-serve` for both TCP and UDP |
+| `-tcp <addr>` | Run only the TCP service on this address, or override TCP address when combined with `-serve` |
+| `-udp <addr>` | Run only the UDP service on this address, or override UDP address when combined with `-serve` |
 | `-h`, `-help` | Print usage and exit 0 |
 
 Supported fields:
@@ -77,6 +122,8 @@ Supported fields:
 | `privatev4` | `private_ipv4` | Underlay (private) IPv4 address of the node |
 | `publicv4` | `public_ipv4` | Public (external) IPv4 address of the node |
 | `publicv6` | `public_ipv6` | Public (external) IPv6 address of the node |
+| n/a | `client_ip` | Request peer IP in service mode; empty in CLI mode |
+| n/a | `client_port` | Request peer port in service mode; `0` in CLI mode |
 
 ### Exit codes
 
@@ -155,8 +202,8 @@ goes in the strategy modules under `src/discover/`.
 - Same flags, same usage text, same exit codes (flag errors exit 2; `-h`
   exits 0; invalid `-field` exits 1 with `valid fields are: …`)
 - Single-field queries print the plain value + newline
-- Full queries print one JSON line with all four keys, always in the same
-  order, empty strings for failed lookups unless `-debug` explains them
+- Full queries print one JSON line with all keys in a fixed order; failed
+  discovery fields are empty strings unless `-debug` explains them
 
 ## Development
 
