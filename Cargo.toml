@@ -1,6 +1,6 @@
 [package]
 name = "netdiscover-serve"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 rust-version = "1.85"
 description = "Discover node network information (underlay/public IP, hostname)"

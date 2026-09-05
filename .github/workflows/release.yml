@@ -160,6 +160,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
+          pattern: ${{ env.BINARY_NAME }}-*
           merge-multiple: true
 
       - name: Generate checksums
